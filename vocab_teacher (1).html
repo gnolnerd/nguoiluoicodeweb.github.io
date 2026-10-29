@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VocabCraft - Suite Học Từ Vựng & Quản Lý Lớp Học (Giáo Viên & Học Sinh)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                        },
+                        teacher: {
+                            500: '#8b5cf6',
+                            600: '#7c3aed',
+                        },
+                        student: {
+                            500: '#10b981',
+                            600: '#059669',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Canvas Confetti CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+        }
+        /* 3D Flip Card Styles */
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+        .transform-style-3d {
+            transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .backface-hidden {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.5);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-full flex flex-col transition-colors duration-200" id="app">
+
+    <!-- Firebase SDK Imports & Initialization Module -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged,
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            signOut
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc, 
+            updateDoc, 
+            deleteDoc, 
+            collection, 
+            query, 
+            onSnapshot, 
+            getDocs, 
+            addDoc 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global environment variables provided by context
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'vocab-craft-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyDemoConfigFallbackOnly12345",
+            authDomain: "demo.firebaseapp.com",
+            projectId: "demo-project",
+            storageBucket: "demo.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:demo"
+        };
+        const customAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Expose Firebase services globally for Vue application
+        window.FirebaseServices = {
+            appId,
+            auth,
+            db,
+            signInAnonymously,
+            signInWithCustomToken,
+            onAuthStateChanged,
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            signOut,
+            doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, onSnapshot, getDocs, addDoc,
+            customAuthToken
+        };
+
+        window.dispatchEvent(new Event('firebase-ready'));
+    </script>
+
+    <!-- Toast Notification Overlay -->
+    <div class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none">
+        <transition-group name="toast">
+            <div v-for="toast in toasts" :key="toast.id"
+                :class="['pointer-events-auto px-4 py-3 rounded-2xl shadow-xl border text-xs sm:text-sm font-semibold flex items-center space-x-3 transition-all duration-300 transform',
+                toast.type === 'success' ? 'bg-emerald-500 text-white border-emerald-600' :
+                toast.type === 'error' ? 'bg-rose-500 text-white border-rose-600' :
+                'bg-slate-800 text-white border-slate-700']">
+                <i :class="toast.type === 'success' ? 'fa-solid fa-circle-check' : toast.type === 'error' ? 'fa-solid fa-circle-exclamation' : 'fa-solid fa-info-circle'"></i>
+                <span>{{ toast.message }}</span>
+            </div>
+        </transition-group>
+    </div>
+
+    <!-- Top Navigation Header -->
+    <header class="sticky top-0 z-40 bg-white/90 dark:bg-slate-800/90 backdrop-blur border-b border-slate-200 dark:border-slate-700 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                
+                <!-- Logo & Brand -->
+                <div class="flex items-center space-x-3 cursor-pointer" @click="activeTab = 'dashboard'">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+                        <i class="fa-solid fa-graduation-cap text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xl font-black bg-gradient-to-r from-brand-600 to-indigo-600 dark:from-brand-400 dark:to-indigo-300 bg-clip-text text-transparent">VocabCraft</span>
+                            <!-- Role Badge -->
+                            <span v-if="userProfile.role === 'teacher'" class="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 border border-purple-300">
+                                <i class="fa-solid fa-chalkboard-teacher mr-1"></i>Giáo Viên
+                            </span>
+                            <span v-else-if="userProfile.role === 'student'" class="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 border border-emerald-300">
+                                <i class="fa-solid fa-user-graduate mr-1"></i>Học Sinh
+                            </span>
+                            <span v-else class="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                Khách (Demo)
+                            </span>
+                        </div>
+                        <p class="hidden sm:block text-[11px] text-slate-400 font-medium">Hệ thống Học & Kiểm tra Từ vựng Thông Minh</p>
+                    </div>
+                </div>
+
+                <!-- Navigation Tabs (Desktop) -->
+                <nav class="hidden md:flex space-x-1">
+                    <button v-for="tab in filteredNavTabs" :key="tab.id" @click="activeTab = tab.id"
+                        :class="['px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center space-x-2',
+                        activeTab === tab.id ? 'bg-brand-500 text-white shadow' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60']">
+                        <i :class="tab.icon"></i>
+                        <span>{{ tab.label }}</span>
+                    </button>
+                </nav>
+
+                <!-- Auth & User Actions -->
+                <div class="flex items-center space-x-2 sm:space-x-3">
+                    <!-- Streak Indicator -->
+                    <div v-if="userProfile.role === 'student' || isGuest" class="hidden sm:flex items-center space-x-1 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-full border border-amber-200 dark:border-amber-800 text-xs font-bold">
+                        <i class="fa-solid fa-fire text-amber-500 animate-pulse"></i>
+                        <span>{{ userStats.streakDays }} Ngày</span>
+                    </div>
+
+                    <!-- Dark Mode Toggle -->
+                    <button @click="toggleDarkMode" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition">
+                        <i :class="darkMode ? 'fa-solid fa-sun text-amber-400' : 'fa-solid fa-moon text-indigo-600'"></i>
+                    </button>
+
+                    <!-- Account Button / Auth Switcher -->
+                    <div v-if="currentUser && !isGuest" class="relative">
+                        <button @click="showUserDropdown = !showUserDropdown" class="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition">
+                            <div class="w-6 h-6 rounded-full bg-brand-500 text-white flex items-center justify-center text-xs font-bold">
+                                {{ userProfile.name ? userProfile.name.charAt(0).toUpperCase() : 'U' }}
+                            </div>
+                            <span class="text-xs font-bold max-w-[100px] truncate hidden sm:inline-block">{{ userProfile.name || 'Tài khoản' }}</span>
+                            <i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i>
+                        </button>
+
+                        <!-- Dropdown Menu -->
+                        <div v-if="showUserDropdown" @click="showUserDropdown = false" class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 py-2 z-50 text-xs">
+                            <div class="px-4 py-2 border-b dark:border-slate-700">
+                                <p class="font-bold text-slate-900 dark:text-white truncate">{{ userProfile.name }}</p>
+                                <p class="text-[10px] text-slate-400 truncate">{{ (currentUser && currentUser.email) ? currentUser.email : 'Tài khoản hệ thống' }}</p>
+                            </div>
+                            <button @click="handleSignOut" class="w-full text-left px-4 py-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold flex items-center space-x-2">
+                                <i class="fa-solid fa-right-from-bracket"></i>
+                                <span>Đăng Xuất</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Login Button for Guest -->
+                    <button v-else @click="openAuthModal('login')" class="px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md shadow-brand-500/20 transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-user-plus"></i>
+                        <span>Đăng Nhập</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Navigation Bar -->
+        <div class="md:hidden border-t border-slate-200 dark:border-slate-700 px-2 py-2 flex justify-around overflow-x-auto bg-slate-100/60 dark:bg-slate-800/60 backdrop-blur">
+            <button v-for="tab in filteredNavTabs" :key="tab.id" @click="activeTab = tab.id"
+                :class="['px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap flex flex-col items-center space-y-1',
+                activeTab === tab.id ? 'bg-brand-500 text-white' : 'text-slate-600 dark:text-slate-300']">
+                <i :class="tab.icon"></i>
+                <span>{{ tab.label }}</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Guest Banner Prompt -->
+    <div v-if="isGuest" class="bg-amber-500 text-slate-900 px-4 py-2 text-xs font-bold text-center flex items-center justify-center space-x-2">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>Bạn đang trải nghiệm ở chế độ Khách (Demo). Đăng ký tài khoản Giáo Viên hoặc Học Sinh để lưu dữ liệu lâu dài.</span>
+        <button @click="openAuthModal('register')" class="underline ml-2 hover:text-white">Đăng ký ngay</button>
+    </div>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- ================= DASHBOARD TAB ================= -->
+        <section v-if="activeTab === 'dashboard'" class="space-y-6">
+            
+            <!-- Hero Banner tailored by Role -->
+            <div :class="['relative overflow-hidden rounded-3xl p-6 sm:p-8 text-white shadow-xl bg-gradient-to-r',
+                userProfile.role === 'teacher' ? 'from-purple-600 via-indigo-600 to-brand-600' : 'from-brand-600 via-teal-600 to-emerald-600']">
+                <div class="relative z-10 max-w-2xl space-y-3">
+                    <span class="inline-flex items-center space-x-1.5 px-3 py-1 bg-white/20 backdrop-blur rounded-full text-xs font-bold">
+                        <i :class="userProfile.role === 'teacher' ? 'fa-solid fa-chalkboard-teacher' : 'fa-solid fa-graduation-cap'"></i>
+                        <span>{{ userProfile.role === 'teacher' ? 'Không Gian Dành Cho Giáo Viên' : 'Góc Học Tập Học Sinh' }}</span>
+                    </span>
+                    
+                    <h1 class="text-2xl sm:text-4xl font-extrabold tracking-tight">
+                        {{ userProfile.role === 'teacher' ? 'Quản Lý Bài Giảng & Theo Dõi Tiến Độ Lớp Học' : 'Học Từ Vựng Tiếng Anh Theo Chuẩn Active Recall' }}
+                    </h1>
+                    
+                    <p class="text-slate-100 text-xs sm:text-sm leading-relaxed">
+                        {{ userProfile.role === 'teacher' 
+                            ? 'Sáng tạo bộ từ vựng, cấp Mã Lớp (Class Code) 6 ký tự cho học sinh và xem báo cáo kết quả làm bài trắc nghiệm thời gian thực.' 
+                            : 'Nhập Mã Lớp từ Giáo Viên, tự tạo bộ từ cá nhân và luyện tập qua Flashcard 3D, Quiz trắc nghiệm, Nối từ và Điền từ chính tả.' }}
+                    </p>
+
+                    <div class="pt-2 flex flex-wrap gap-3">
+                        <template v-if="userProfile.role === 'teacher'">
+                            <button @click="activeTab = 'teacher-sets'" class="px-4 py-2.5 bg-white text-purple-700 font-bold rounded-xl shadow hover:bg-slate-100 transition text-xs sm:text-sm flex items-center space-x-2">
+                                <i class="fa-solid fa-plus-circle"></i>
+                                <span>Tạo & Quản Lý Bộ Từ</span>
+                            </button>
+                            <button @click="activeTab = 'analytics'" class="px-4 py-2.5 bg-purple-900/50 backdrop-blur hover:bg-purple-900 text-white font-bold rounded-xl transition text-xs sm:text-sm flex items-center space-x-2">
+                                <i class="fa-solid fa-chart-line"></i>
+                                <span>Báo Cáo Tiến Độ</span>
+                            </button>
+                        </template>
+                        <template v-else>
+                            <button @click="startQuickQuiz" class="px-4 py-2.5 bg-white text-brand-700 font-bold rounded-xl shadow hover:bg-slate-100 transition text-xs sm:text-sm flex items-center space-x-2">
+                                <i class="fa-solid fa-bolt text-amber-500"></i>
+                                <span>Luyện Quiz Ngay</span>
+                            </button>
+                            <button @click="openJoinCodeModal" class="px-4 py-2.5 bg-brand-800/60 backdrop-blur hover:bg-brand-800 text-white font-bold rounded-xl transition text-xs sm:text-sm flex items-center space-x-2">
+                                <i class="fa-solid fa-key"></i>
+                                <span>Nhập Mã Lớp (Class Code)</span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+                <i :class="[userProfile.role === 'teacher' ? 'fa-solid fa-chalkboard' : 'fa-solid fa-brain', 'absolute -right-6 -bottom-6 text-9xl text-white/10 pointer-events-none']"></i>
+            </div>
+
+            <!-- Analytics Summary Stats -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl font-black">
+                        <i class="fa-solid fa-book-open"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-black">{{ vocabSets.length }}</div>
+                        <div class="text-xs text-slate-500 font-medium">{{ userProfile.role === 'teacher' ? 'Bộ từ đã tạo' : 'Bộ từ đang có' }}</div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl font-black">
+                        <i class="fa-solid fa-check-double"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-black">{{ masteredWordsCount }}</div>
+                        <div class="text-xs text-slate-500 font-medium">Từ đã thành thạo</div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl font-black">
+                        <i class="fa-solid fa-bullseye"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-black">{{ accuracyRate }}%</div>
+                        <div class="text-xs text-slate-500 font-medium">Tỷ lệ trả lời đúng</div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl font-black">
+                        <i class="fa-solid fa-users"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-black">{{ studentProgressList.length }}</div>
+                        <div class="text-xs text-slate-500 font-medium">{{ userProfile.role === 'teacher' ? 'Bài nộp học sinh' : 'Lần làm Quiz' }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Modes Section -->
+            <div class="space-y-4">
+                <h2 class="text-lg font-bold flex items-center space-x-2">
+                    <i class="fa-solid fa-gamepad text-brand-500"></i>
+                    <span>Chế Độ Học Tập & Ôn Luyện</span>
+                </h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div @click="switchStudyMode('flashcard')" class="group cursor-pointer bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-500 shadow-sm hover:shadow-md transition">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-lg mb-3 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-clone"></i>
+                        </div>
+                        <h3 class="font-bold text-base mb-1">Flashcards 3D</h3>
+                        <p class="text-xs text-slate-500">Lật thẻ 3D, nghe phát âm phát ngữ IPA chuẩn và phân loại từ.</p>
+                    </div>
+
+                    <div @click="switchStudyMode('quiz')" class="group cursor-pointer bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-500 shadow-sm hover:shadow-md transition">
+                        <div class="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg mb-3 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-list-check"></i>
+                        </div>
+                        <h3 class="font-bold text-base mb-1">Trắc Nghiệm Quiz</h3>
+                        <p class="text-xs text-slate-500">Kiểm tra phản xạ từ vựng Anh-Việt & Việt-Anh ngẫu nhiên.</p>
+                    </div>
+
+                    <div @click="switchStudyMode('matching')" class="group cursor-pointer bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-500 shadow-sm hover:shadow-md transition">
+                        <div class="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center text-lg mb-3 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-puzzle-piece"></i>
+                        </div>
+                        <h3 class="font-bold text-base mb-1">Nối Từ Tốc Độ</h3>
+                        <p class="text-xs text-slate-500">Ghép cặp Anh - Việt nhanh tay tính điểm combo và thời gian.</p>
+                    </div>
+
+                    <div @click="switchStudyMode('spelling')" class="group cursor-pointer bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-brand-500 shadow-sm hover:shadow-md transition">
+                        <div class="w-10 h-10 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center text-lg mb-3 group-hover:scale-110 transition-transform">
+                            <i class="fa-solid fa-keyboard"></i>
+                        </div>
+                        <h3 class="font-bold text-base mb-1">Gõ Đúng Chính Tả</h3>
+                        <p class="text-xs text-slate-500">Điền từ vào câu ví dụ ngữ cảnh để rèn phản xạ viết chuẩn.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= TEACHER: MANAGE SETS TAB ================= -->
+        <section v-if="activeTab === 'teacher-sets'" class="space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-bold">Quản Lý Bộ Từ Vựng Giáo Viên</h2>
+                    <p class="text-xs text-slate-500">Tạo mới, chỉnh sửa và cấp Mã Lớp (6 ký tự) cho học sinh tham gia học.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button @click="openModal('addSet')" class="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center space-x-2 shadow transition">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Tạo Bộ Từ Mới</span>
+                    </button>
+                    <button @click="openModal('bulkImport')" class="px-3.5 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-800 dark:text-white rounded-xl text-xs font-bold flex items-center space-x-2 transition">
+                        <i class="fa-solid fa-file-import"></i>
+                        <span>Import Dữ Liệu Nhanh</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sets Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div v-for="set in vocabSets" :key="set.id" class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 flex flex-col justify-between shadow-sm hover:shadow-md transition">
+                    <div>
+                        <div class="flex items-start justify-between">
+                            <span class="px-2.5 py-1 text-[11px] font-bold rounded-full bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300">
+                                {{ set.category || 'Giáo án' }}
+                            </span>
+                            <!-- Class Code Tag -->
+                            <div class="flex items-center space-x-1">
+                                <span class="px-2.5 py-1 text-xs font-black font-mono bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 rounded-lg border border-amber-300 cursor-pointer" @click="copyCode(set.code)" title="Bấm để chép mã">
+                                    <i class="fa-solid fa-key mr-1"></i>{{ set.code || 'ENG000' }}
+                                </span>
+                                <button v-if="set.isCustom || userProfile.role === 'teacher'" @click="deleteSet(set.id)" class="text-slate-400 hover:text-rose-500 p-1 rounded">
+                                    <i class="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <h3 class="text-lg font-bold mt-3 text-slate-900 dark:text-white">{{ set.title }}</h3>
+                        <p class="text-xs text-slate-500 mt-1 line-clamp-2">{{ set.description }}</p>
+
+                        <div class="mt-4 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 dark:border-slate-700/60 pt-3">
+                            <span><i class="fa-solid fa-font mr-1"></i> {{ set.words ? set.words.length : 0 }} từ</span>
+                            <span class="text-purple-600 dark:text-purple-400 font-bold"><i class="fa-solid fa-user-check mr-1"></i>GV: {{ set.teacherName || 'Hệ thống' }}</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 flex gap-2">
+                        <button @click="openWordListModal(set)" class="flex-1 py-2 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-xl transition flex items-center justify-center space-x-1">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                            <span>Chỉnh Sửa Từ Vựng</span>
+                        </button>
+                        <button @click="copyCode(set.code)" class="px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition" title="Sao chép Mã Lớp gửi Học sinh">
+                            <i class="fa-solid fa-share-nodes"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= TEACHER: STUDENT ANALYTICS TAB ================= -->
+        <section v-if="activeTab === 'analytics'" class="space-y-6">
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                        <h2 class="text-xl font-bold">Báo Cáo Tiến Độ Làm Bài Của Học Sinh</h2>
+                        <p class="text-xs text-slate-500">Cập nhật thời gian thực kết quả bài Quiz và luyện tập của học sinh.</p>
+                    </div>
+                    <button @click="fetchStudentProgress" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-xs font-bold rounded-xl flex items-center space-x-1">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>Làm Mới Bảng</span>
+                    </button>
+                </div>
+
+                <!-- Table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                        <thead class="bg-slate-50 dark:bg-slate-900 uppercase font-bold text-slate-400">
+                            <tr>
+                                <th class="p-3 rounded-l-xl">Học Sinh</th>
+                                <th class="p-3">Bộ Từ / Mã Lớp</th>
+                                <th class="p-3">Điểm Số</th>
+                                <th class="p-3">Tỷ Lệ ĐÚNG</th>
+                                <th class="p-3 rounded-r-xl">Thời Gian làm</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                            <tr v-for="item in studentProgressList" :key="item.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/40">
+                                <td class="p-3 font-bold text-slate-900 dark:text-white">
+                                    <i class="fa-solid fa-user-graduate text-emerald-500 mr-2"></i>{{ item.studentName || 'Học sinh' }}
+                                </td>
+                                <td class="p-3">
+                                    <span class="font-semibold">{{ item.setTitle || 'Bộ từ' }}</span>
+                                    <span class="ml-2 font-mono text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 rounded font-bold">{{ item.code }}</span>
+                                </td>
+                                <td class="p-3 font-bold text-brand-500">{{ item.score }} / {{ item.total }}</td>
+                                <td class="p-3">
+                                    <span :class="['px-2 py-0.5 rounded-full font-bold text-[10px]',
+                                        (item.score / item.total) >= 0.8 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800']">
+                                        {{ Math.round((item.score / item.total) * 100) }}%
+                                    </span>
+                                </td>
+                                <td class="p-3 text-slate-400">{{ formatDate(item.timestamp) }}</td>
+                            </tr>
+                            <tr v-if="studentProgressList.length === 0">
+                                <td colspan="5" class="text-center py-8 text-slate-400 italic">Chưa có kết quả làm bài nào được lưu.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= STUDENT: SETS & JOIN CODE TAB ================= -->
+        <section v-if="activeTab === 'student-sets'" class="space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-bold">Danh Sách Bộ Từ Vựng Học Tập</h2>
+                    <p class="text-xs text-slate-500">Các bộ từ chuẩn hóa và bộ từ nhận từ Giáo Viên thông qua Mã Lớp.</p>
+                </div>
+                <button @click="openJoinCodeModal" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center space-x-2 shadow transition">
+                    <i class="fa-solid fa-key"></i>
+                    <span>Nhập Mã Lớp (Class Code)</span>
+                </button>
+            </div>
+
+            <!-- Set Cards Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div v-for="set in vocabSets" :key="set.id" 
+                    :class="['bg-white dark:bg-slate-800 rounded-2xl border p-5 flex flex-col justify-between transition hover:shadow-md',
+                    selectedSetId === set.id ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-slate-200 dark:border-slate-700']">
+                    <div>
+                        <div class="flex items-start justify-between">
+                            <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                {{ set.category }}
+                            </span>
+                            <span v-if="set.code" class="px-2 py-0.5 text-[10px] font-mono font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 rounded">
+                                CODE: {{ set.code }}
+                            </span>
+                        </div>
+
+                        <h3 class="text-lg font-bold mt-3 text-slate-900 dark:text-white">{{ set.title }}</h3>
+                        <p class="text-xs text-slate-500 mt-1 line-clamp-2">{{ set.description }}</p>
+
+                        <div class="mt-4 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 dark:border-slate-700/60 pt-3">
+                            <span><i class="fa-solid fa-font mr-1"></i> {{ set.words ? set.words.length : 0 }} từ</span>
+                            <span><i class="fa-solid fa-check-double text-emerald-500 mr-1"></i> {{ getMasteredCountForSet(set) }} thuộc</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 flex gap-2">
+                        <button @click="selectSetForStudy(set.id, 'flashcard')" class="flex-1 py-2 bg-brand-50 dark:bg-brand-950/40 hover:bg-brand-100 text-brand-600 dark:text-brand-300 text-xs font-bold rounded-xl transition flex items-center justify-center space-x-1">
+                            <i class="fa-solid fa-play text-[10px]"></i>
+                            <span>Học Ngay</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= FLASHCARD TAB ================= -->
+        <section v-if="activeTab === 'flashcard'" class="max-w-2xl mx-auto space-y-6">
+            <!-- Set Selector & Progress Bar -->
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="w-full sm:w-auto">
+                    <label class="text-xs text-slate-400 block mb-1 font-medium">Bộ từ đang chọn:</label>
+                    <select v-model="selectedSetId" @change="resetFlashcards" class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 w-full">
+                        <option v-for="set in vocabSets" :key="set.id" :value="set.id">{{ set.title }} ({{ set.words ? set.words.length : 0 }} từ)</option>
+                    </select>
+                </div>
+                <div class="text-right text-xs font-bold text-slate-500">
+                    Thẻ {{ currentFlashcardIndex + 1 }} / {{ currentWordList.length }}
+                </div>
+            </div>
+
+            <div v-if="currentWordList.length > 0">
+                <!-- 3D Flashcard Component -->
+                <div class="perspective-1000 w-full h-80 sm:h-96 cursor-pointer" @click="isCardFlipped = !isCardFlipped">
+                    <div :class="['relative w-full h-full rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl transition-all duration-500 transform-style-3d bg-white dark:bg-slate-800', isCardFlipped ? 'rotate-y-180' : '']">
+                        
+                        <!-- CARD FRONT -->
+                        <div class="absolute inset-0 w-full h-full p-6 flex flex-col justify-between items-center text-center backface-hidden">
+                            <div class="w-full flex justify-between items-center">
+                                <span class="text-xs font-bold px-2.5 py-1 rounded-full bg-brand-50 dark:bg-brand-900/40 text-brand-600 dark:text-brand-300 uppercase">
+                                    {{ currentCard.pos || 'vocabulary' }}
+                                </span>
+                                <button @click.stop="speakWord(currentCard.word)" class="w-10 h-10 rounded-full bg-brand-500 text-white hover:bg-brand-600 transition flex items-center justify-center shadow-md">
+                                    <i class="fa-solid fa-volume-high"></i>
+                                </button>
+                            </div>
+
+                            <div class="my-auto">
+                                <h2 class="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white mb-2">{{ currentCard.word }}</h2>
+                                <p class="text-slate-500 dark:text-slate-400 font-mono text-sm sm:text-base">{{ currentCard.ipa }}</p>
+                            </div>
+
+                            <div class="text-xs text-slate-400 flex items-center space-x-1">
+                                <i class="fa-solid fa-rotate"></i>
+                                <span>Nhấn để xem nghĩa và ví dụ</span>
+                            </div>
+                        </div>
+
+                        <!-- CARD BACK -->
+                        <div class="absolute inset-0 w-full h-full p-6 flex flex-col justify-between items-center text-center backface-hidden rotate-y-180 bg-slate-900 text-white rounded-3xl">
+                            <div class="w-full flex justify-between items-center">
+                                <span class="text-xs font-bold text-amber-400 uppercase tracking-wider">Tiếng Việt & Ngữ Cảnh</span>
+                                <span v-if="isMastered(currentCard.id)" class="text-xs text-emerald-400 font-bold"><i class="fa-solid fa-check"></i> Đã thuộc</span>
+                            </div>
+
+                            <div class="my-auto space-y-3">
+                                <div class="text-2xl sm:text-3xl font-extrabold text-amber-300">{{ currentCard.meaning }}</div>
+                                
+                                <div v-if="currentCard.example" class="p-3 bg-slate-800/80 rounded-xl text-xs sm:text-sm text-slate-200 italic border-l-2 border-brand-500 text-left">
+                                    "{{ currentCard.example }}"
+                                </div>
+                            </div>
+
+                            <div class="text-xs text-slate-400 flex items-center space-x-1">
+                                <i class="fa-solid fa-rotate"></i>
+                                <span>Nhấn để quay lại mặt trước</span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="mt-6 flex items-center justify-between gap-4">
+                    <button @click="markFlashcard(false)" class="flex-1 py-3 bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-bold rounded-2xl text-xs sm:text-sm transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                        <span>Cần Ôn Lại</span>
+                    </button>
+
+                    <button @click="markFlashcard(true)" class="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl text-xs sm:text-sm shadow-md transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-check text-lg"></i>
+                        <span>Đã Thuộc Từ</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= MULTIPLE CHOICE QUIZ TAB ================= -->
+        <section v-if="activeTab === 'quiz'" class="max-w-2xl mx-auto space-y-6">
+            <div v-if="!quizFinished && currentQuizQuestion" class="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-lg space-y-6">
+                <!-- Progress Header -->
+                <div class="flex items-center justify-between text-xs font-bold text-slate-500">
+                    <span>Câu {{ quizCurrentIndex + 1 }} / {{ quizQuestions.length }}</span>
+                    <span>Điểm: <strong class="text-brand-500 font-extrabold text-sm">{{ quizScore }}</strong></span>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div class="h-full bg-brand-500 transition-all duration-300" :style="{ width: ((quizCurrentIndex + 1) / quizQuestions.length * 100) + '%' }"></div>
+                </div>
+
+                <!-- Question Title -->
+                <div class="text-center py-4">
+                    <span class="text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 uppercase mb-2 inline-block">
+                        {{ currentQuizQuestion.mode === 'EN_TO_VN' ? 'Chọn Nghĩa Tiếng Việt' : 'Chọn Từ Tiếng Anh Tương Ứng' }}
+                    </span>
+                    <h3 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-1">
+                        {{ currentQuizQuestion.prompt }}
+                    </h3>
+                    <p v-if="currentQuizQuestion.ipa" class="text-slate-400 font-mono text-sm mt-1">{{ currentQuizQuestion.ipa }}</p>
+                </div>
+
+                <!-- Answer Options -->
+                <div class="grid grid-cols-1 gap-3">
+                    <button v-for="(opt, idx) in currentQuizQuestion.options" :key="idx"
+                        @click="submitQuizAnswer(opt)"
+                        :disabled="quizAnswered"
+                        :class="['w-full p-4 rounded-xl text-left font-bold text-sm transition flex items-center justify-between border', getOptionClass(opt)]">
+                        <span>{{ opt }}</span>
+                        <i v-if="quizAnswered && opt === currentQuizQuestion.correct" class="fa-solid fa-circle-check text-emerald-500 text-lg"></i>
+                        <i v-if="quizAnswered && quizSelectedOption === opt && opt !== currentQuizQuestion.correct" class="fa-solid fa-circle-xmark text-rose-500 text-lg"></i>
+                    </button>
+                </div>
+
+                <!-- Explanation & Next Button -->
+                <div v-if="quizAnswered" class="pt-4 border-t border-slate-100 dark:border-slate-700 space-y-3">
+                    <div class="p-3 bg-slate-50 dark:bg-slate-900/80 rounded-xl text-xs space-y-1">
+                        <div class="font-bold text-slate-700 dark:text-slate-200">Giải thích từ Thầy Giáo:</div>
+                        <div class="text-slate-600 dark:text-slate-300">
+                            <strong>{{ currentQuizQuestion.targetWord.word }}</strong>: {{ currentQuizQuestion.targetWord.meaning }}
+                        </div>
+                    </div>
+
+                    <button @click="nextQuizQuestion" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm shadow transition flex items-center justify-center space-x-2">
+                        <span>Câu Tiếp Theo</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quiz Result Screen -->
+            <div v-if="quizFinished" class="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 text-center space-y-6 shadow-xl">
+                <div class="w-20 h-20 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-500 mx-auto flex items-center justify-center text-4xl">
+                    <i class="fa-solid fa-trophy"></i>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-black">Hoàn Thành Bài Quiz!</h2>
+                    <p class="text-xs text-slate-500 mt-1">Kết quả đã được ghi nhận tự động vào cơ sở dữ liệu.</p>
+                </div>
+
+                <div class="flex justify-center items-center space-x-6 py-4 bg-slate-50 dark:bg-slate-900 rounded-2xl">
+                    <div>
+                        <div class="text-2xl font-black text-brand-500">{{ quizScore }} / {{ quizQuestions.length }}</div>
+                        <div class="text-xs text-slate-400 font-medium">Số câu đúng</div>
+                    </div>
+                    <div class="w-px h-8 bg-slate-200 dark:bg-slate-700"></div>
+                    <div>
+                        <div class="text-2xl font-black text-emerald-500">{{ Math.round((quizScore / quizQuestions.length) * 100) }}%</div>
+                        <div class="text-xs text-slate-400 font-medium">Chính xác</div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button @click="startQuiz" class="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs sm:text-sm transition">
+                        <i class="fa-solid fa-rotate-right mr-1"></i> Làm Lại Quiz
+                    </button>
+                    <button @click="activeTab = 'dashboard'" class="flex-1 py-3 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white font-bold rounded-xl text-xs sm:text-sm transition">
+                        Về Trang Chủ
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= MATCHING GAME TAB ================= -->
+        <section v-if="activeTab === 'matching'" class="max-w-3xl mx-auto space-y-6">
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div>
+                    <h2 class="font-bold text-sm sm:text-base">Trò Chơi Nối Từ Tốc Độ</h2>
+                    <p class="text-xs text-slate-500">Ghép cặp Từ tiếng Anh và Nghĩa tiếng Việt tương ứng.</p>
+                </div>
+                <div class="flex items-center space-x-4 text-xs font-bold">
+                    <div class="text-amber-500"><i class="fa-solid fa-fire mr-1"></i> Streak: {{ matchStreak }}</div>
+                    <div class="text-brand-500"><i class="fa-solid fa-stopwatch mr-1"></i> {{ matchTimer }}s</div>
+                </div>
+            </div>
+
+            <div v-if="!matchingGameFinished" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                <button v-for="card in matchCards" :key="card.id"
+                    @click="selectMatchCard(card)"
+                    :disabled="card.matched"
+                    :class="['p-4 rounded-2xl font-bold text-xs sm:text-sm min-h-[90px] flex items-center justify-center text-center transition border shadow-sm',
+                    card.matched ? 'bg-slate-100 dark:bg-slate-900 text-slate-300 dark:text-slate-700 border-transparent cursor-not-allowed opacity-40' :
+                    card.selected ? 'bg-brand-500 text-white border-brand-600 scale-95' :
+                    'bg-white dark:bg-slate-800 hover:border-brand-400 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700']">
+                    {{ card.text }}
+                </button>
+            </div>
+
+            <div v-else class="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 text-center space-y-5 shadow-xl">
+                <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-500 mx-auto flex items-center justify-center text-3xl">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </div>
+                <h2 class="text-2xl font-black">Xuất Sắc! Bạn Đã Nối Xong!</h2>
+                <p class="text-xs text-slate-500">Thời gian hoàn thành: <strong>{{ matchTimer }} giây</strong></p>
+                <button @click="startMatchingGame" class="px-6 py-3 bg-brand-600 text-white font-bold rounded-xl text-xs sm:text-sm shadow transition">
+                    <i class="fa-solid fa-rotate-right mr-1"></i> Chơi Lại Ván Mới
+                </button>
+            </div>
+        </section>
+
+        <!-- ================= SPELLING TAB ================= -->
+        <section v-if="activeTab === 'spelling'" class="max-w-xl mx-auto space-y-6">
+            <div v-if="currentSpellingCard" class="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-lg space-y-6">
+                <div class="flex justify-between items-center text-xs font-bold text-slate-400">
+                    <span>Luyện Gõ Chính Tả</span>
+                    <span>Từ {{ spellingIndex + 1 }} / {{ currentWordList.length }}</span>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="text-xl font-bold text-slate-900 dark:text-white">
+                        Nghĩa: <span class="text-brand-500">{{ currentSpellingCard.meaning }}</span>
+                    </div>
+
+                    <div v-if="currentSpellingCard.example" class="p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl text-xs sm:text-sm border-l-4 border-indigo-500 leading-relaxed">
+                        <span class="text-slate-400 block mb-1 font-bold">Điền từ đúng vào chỗ trống:</span>
+                        <p class="text-slate-700 dark:text-slate-200 font-mono" v-html="formattedSpellingExample"></p>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <input type="text" v-model="spellingInput" @keyup.enter="checkSpelling" placeholder="Gõ từ tiếng Anh..." 
+                        :disabled="spellingChecked"
+                        class="w-full px-4 py-3.5 rounded-2xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-bold text-base focus:outline-none focus:ring-2 focus:ring-brand-500">
+
+                    <div class="flex gap-2">
+                        <button @click="showSpellingHint = true" class="px-4 py-2 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 text-xs font-bold rounded-xl border border-amber-200 dark:border-amber-800">
+                            <i class="fa-solid fa-lightbulb mr-1"></i> Xem Gợi Ý
+                        </button>
+                        <button @click="checkSpelling" :disabled="spellingChecked || !spellingInput.trim()" class="flex-1 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow transition">
+                            Kiểm Tra
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="showSpellingHint" class="p-3 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 text-xs rounded-xl border border-amber-200">
+                    Gợi ý IPA & Chữ đầu: <strong>{{ currentSpellingCard.ipa }}</strong> | Bắt đầu bằng <strong>'{{ currentSpellingCard.word.charAt(0).toUpperCase() }}'</strong>
+                </div>
+
+                <div v-if="spellingChecked" class="space-y-3">
+                    <div :class="['p-4 rounded-2xl text-xs sm:text-sm font-bold flex items-center space-x-2', 
+                        isSpellingCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800']">
+                        <i :class="isSpellingCorrect ? 'fa-solid fa-circle-check text-lg' : 'fa-solid fa-triangle-exclamation text-lg'"></i>
+                        <div>
+                            <span v-if="isSpellingCorrect">Chính xác! Bạn gõ rất chuẩn.</span>
+                            <span v-else>Chưa chính xác. Đáp án đúng là: <strong class="underline">{{ currentSpellingCard.word }}</strong></span>
+                        </div>
+                    </div>
+
+                    <button @click="nextSpellingCard" class="w-full py-3 bg-slate-800 text-white text-xs sm:text-sm font-bold rounded-xl transition">
+                        Từ Tiếp Theo <i class="fa-solid fa-arrow-right ml-1"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= PEDAGOGICAL CORNER TAB ================= -->
+        <section v-if="activeTab === 'teacher-corner'" class="max-w-4xl mx-auto space-y-6">
+            <div class="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-chalkboard-user"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold">Góc Sư Phạm & Phương Pháp Học Tập Khoa Học</h2>
+                        <p class="text-xs text-slate-500">Ứng dụng Khoa Học Trí Nhớ (Cognitive Psychology) vào giảng dạy tiếng Anh.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="p-5 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+                        <div class="text-brand-500 font-bold text-sm flex items-center space-x-2">
+                            <i class="fa-solid fa-rotate-right"></i>
+                            <span>1. Lặp Lại Ngắt Quãng (Spaced Repetition)</span>
+                        </div>
+                        <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                            Ôn lại từ vựng theo chu kỳ tăng dần (1 ngày, 3 ngày, 7 ngày, 30 ngày) sẽ giúp chống lại đường cong quên rãng Ebbinghaus và chuyển dữ liệu vào trí nhớ vĩnh viễn.
+                        </p>
+                    </div>
+
+                    <div class="p-5 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+                        <div class="text-emerald-500 font-bold text-sm flex items-center space-x-2">
+                            <i class="fa-solid fa-brain"></i>
+                            <span>2. Truy Xuất Chủ Động (Active Recall)</span>
+                        </div>
+                        <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                            Đừng chỉ đọc lại danh sách từ. Việc bắt não bộ "nỗ lực nhớ lại" bằng Flashcard và Quiz chính là chìa khóa thắt chặt các đường truyền thần kinh.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ================= AUTHENTICATION MODAL ================= -->
+    <div v-if="modals.auth" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-5 shadow-2xl border border-slate-200 dark:border-slate-700">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-extrabold text-slate-900 dark:text-white">
+                    {{ authMode === 'login' ? 'Đăng Nhập Tài Khoản' : 'Đăng Ký Tài Khoản Mới' }}
+                </h3>
+                <button @click="closeModal('auth')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- Auth Form -->
+            <form @submit.prevent="handleAuthSubmit" class="space-y-4">
+                
+                <!-- Role Selector (Only during register) -->
+                <div v-if="authMode === 'register'" class="space-y-1">
+                    <label class="text-xs font-bold text-slate-500 block">Bạn là:</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" @click="authForm.role = 'student'" 
+                            :class="['py-2.5 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 border transition',
+                            authForm.role === 'student' ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300']">
+                            <i class="fa-solid fa-user-graduate"></i>
+                            <span>Học Sinh</span>
+                        </button>
+                        <button type="button" @click="authForm.role = 'teacher'" 
+                            :class="['py-2.5 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 border transition',
+                            authForm.role === 'teacher' ? 'bg-purple-600 text-white border-purple-700' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300']">
+                            <i class="fa-solid fa-chalkboard-teacher"></i>
+                            <span>Giáo Viên</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="authMode === 'register'">
+                    <label class="text-xs font-bold text-slate-500 block mb-1">Họ và Tên</label>
+                    <input type="text" v-model="authForm.name" required placeholder="Nguyễn Văn A" class="w-full px-3.5 py-2.5 rounded-xl border dark:bg-slate-900 dark:border-slate-700 text-xs font-bold">
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1">Email</label>
+                    <input type="email" v-model="authForm.email" required placeholder="email@domain.com" class="w-full px-3.5 py-2.5 rounded-xl border dark:bg-slate-900 dark:border-slate-700 text-xs font-bold">
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1">Mật khẩu</label>
+                    <input type="password" v-model="authForm.password" required placeholder="••••••••" class="w-full px-3.5 py-2.5 rounded-xl border dark:bg-slate-900 dark:border-slate-700 text-xs font-bold">
+                </div>
+
+                <button type="submit" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow transition">
+                    {{ authMode === 'login' ? 'Đăng Nhập' : 'Tạo Tài Khoản' }}
+                </button>
+            </form>
+
+            <div class="text-center text-xs text-slate-500 border-t pt-3 dark:border-slate-700">
+                <span v-if="authMode === 'login'">Chưa có tài khoản? <button @click="authMode = 'register'" class="text-brand-500 font-bold underline">Đăng ký ngay</button></span>
+                <span v-else>Đã có tài khoản? <button @click="authMode = 'login'" class="text-brand-500 font-bold underline">Đăng nhập</button></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= JOIN CLASS CODE MODAL ================= -->
+    <div v-if="modals.joinCode" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700 text-center">
+            <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center text-xl mx-auto">
+                <i class="fa-solid fa-key"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-bold">Nhập Mã Lớp (Class Code)</h3>
+                <p class="text-xs text-slate-500 mt-1">Nhập mã 6 ký tự được cung cấp bởi Giáo Viên của bạn.</p>
+            </div>
+
+            <input type="text" v-model="joinCodeInput" maxlength="6" placeholder="ENG123" class="w-full text-center tracking-widest font-mono text-xl py-3 rounded-2xl border border-slate-300 dark:bg-slate-900 uppercase font-black">
+
+            <div class="flex gap-2">
+                <button @click="closeModal('joinCode')" class="flex-1 py-2.5 bg-slate-100 dark:bg-slate-700 text-xs font-bold rounded-xl">Hủy</button>
+                <button @click="submitJoinCode" class="flex-1 py-2.5 bg-brand-600 text-white text-xs font-bold rounded-xl shadow">Tham Gia</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= TEACHER: ADD SET MODAL ================= -->
+    <div v-if="modals.addSet" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-bold">Tạo Bộ Từ Vựng Mới</h3>
+                <button @click="closeModal('addSet')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1">Tên Bộ Từ</label>
+                    <input type="text" v-model="newSetForm.title" placeholder="Ví dụ: Chuyên Ngành IT - Bài 1" class="w-full px-3 py-2 border rounded-xl dark:bg-slate-900 text-xs">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1">Thể Loại</label>
+                    <input type="text" v-model="newSetForm.category" placeholder="Ví dụ: Lớp 10 / IELTS / TOEIC" class="w-full px-3 py-2 border rounded-xl dark:bg-slate-900 text-xs">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1">Mô Tả Nhanh</label>
+                    <textarea v-model="newSetForm.description" placeholder="Mục tiêu bài học..." class="w-full px-3 py-2 border rounded-xl dark:bg-slate-900 text-xs h-20"></textarea>
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button @click="closeModal('addSet')" class="flex-1 py-2.5 bg-slate-100 dark:bg-slate-700 text-xs font-bold rounded-xl">Hủy</button>
+                <button @click="saveNewSet" class="flex-1 py-2.5 bg-purple-600 text-white text-xs font-bold rounded-xl shadow">Lưu & Tạo Mã</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= TEACHER: BULK IMPORT MODAL ================= -->
+    <div v-if="modals.bulkImport" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-bold">Import Từ Vựng Hàng Loạt</h3>
+                <button @click="closeModal('bulkImport')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <p class="text-xs text-slate-500">
+                Dán danh sách từ theo cú pháp: <br>
+                <code class="bg-slate-100 dark:bg-slate-900 px-1 py-0.5 rounded text-purple-500">Từ tiếng Anh | Nghĩa tiếng Việt | Câu ví dụ</code>
+            </p>
+
+            <div>
+                <label class="text-xs font-bold text-slate-500 block mb-1">Chọn bộ từ đích:</label>
+                <select v-model="bulkImportSetId" class="w-full px-3 py-2 border rounded-xl dark:bg-slate-900 text-xs mb-3">
+                    <option v-for="set in vocabSets" :key="set.id" :value="set.id">{{ set.title }}</option>
+                </select>
+
+                <textarea v-model="bulkImportText" placeholder="ubiquitous | xuất hiện khắp nơi | Smartphones are ubiquitous.
+pragmatic | thực tế | We need a pragmatic solution." class="w-full px-3 py-2 border rounded-xl dark:bg-slate-900 text-xs font-mono h-40"></textarea>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button @click="closeModal('bulkImport')" class="flex-1 py-2.5 bg-slate-100 dark:bg-slate-700 text-xs font-bold rounded-xl">Hủy</button>
+                <button @click="processBulkImport" class="flex-1 py-2.5 bg-purple-600 text-white text-xs font-bold rounded-xl shadow">Tiến Hành Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= WORD LIST MODAL ================= -->
+    <div v-if="modals.wordList && activeViewingSet" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85vh] flex flex-col">
+            <div class="flex justify-between items-center border-b pb-3 dark:border-slate-700">
+                <div>
+                    <h3 class="text-lg font-bold">{{ activeViewingSet.title }}</h3>
+                    <p class="text-xs text-slate-500">Mã Lớp: <strong class="text-amber-500 font-mono">{{ activeViewingSet.code }}</strong> | {{ activeViewingSet.words ? activeViewingSet.words.length : 0 }} từ</p>
+                </div>
+                <button @click="closeModal('wordList')" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- Single Word Form -->
+            <div class="p-3 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+                <span class="text-xs font-bold text-brand-500 block">+ Thêm Từ Mới</span>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input type="text" v-model="singleWordForm.word" placeholder="Từ (Resilience)" class="px-2.5 py-1.5 border rounded-lg dark:bg-slate-800 text-xs">
+                    <input type="text" v-model="singleWordForm.ipa" placeholder="IPA (/rɪˈzɪl.jəns/)" class="px-2.5 py-1.5 border rounded-lg dark:bg-slate-800 text-xs">
+                    <input type="text" v-model="singleWordForm.meaning" placeholder="Nghĩa (Khả năng phục hồi)" class="px-2.5 py-1.5 border rounded-lg dark:bg-slate-800 text-xs">
+                </div>
+                <input type="text" v-model="singleWordForm.example" placeholder="Câu ví dụ..." class="w-full px-2.5 py-1.5 border rounded-lg dark:bg-slate-800 text-xs">
+                <button @click="addSingleWordToActiveSet" class="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition">
+                    Lưu Từ Vào Bộ
+                </button>
+            </div>
+
+            <!-- Words List -->
+            <div class="flex-1 overflow-y-auto space-y-2 pr-1">
+                <div v-for="w in activeViewingSet.words" :key="w.id" class="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs">
+                    <div>
+                        <span class="font-bold text-slate-900 dark:text-white text-sm mr-2">{{ w.word }}</span>
+                        <span class="text-slate-400 font-mono mr-2">{{ w.ipa }}</span>
+                        <span class="text-slate-600 dark:text-slate-300 font-semibold">{{ w.meaning }}</span>
+                    </div>
+                    <button @click="removeWordFromSet(w.id)" class="text-slate-400 hover:text-rose-500 p-1.5">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN VUE APP JS -->
+    <script>
+        const { createApp } = Vue;
+
+        const DEFAULT_SETS = [
+            {
+                id: 'ielts-7',
+                code: 'IELTS7',
+                title: 'IELTS Academic Vocab (Band 7.0+)',
+                category: 'IELTS Preparation',
+                description: 'Bộ từ vựng học thuật cao cấp cho bài thi IELTS Writing & Speaking.',
+                isCustom: false,
+                teacherName: 'Ban Biên Tập',
+                words: [
+                    { id: 'i1', word: 'ubiquitous', ipa: '/juːˈbɪk.wə.təs/', pos: 'adj', meaning: 'Xuất hiện ở khắp nơi, phổ biến', example: 'Smartphones have become ubiquitous in modern society.' },
+                    { id: 'i2', word: 'ephemeral', ipa: '/ɪˈfem.ər.əl/', pos: 'adj', meaning: 'Phù du, ngắn ngủi', example: 'Fame in the digital age can be remarkably ephemeral.' },
+                    { id: 'i3', word: 'pragmatic', ipa: '/præɡˈmæt.ɪk/', pos: 'adj', meaning: 'Thực tế, thực dụng', example: 'We need a pragmatic approach to solve this urban problem.' }
+                ]
+            },
+            {
+                id: 'toeic-biz',
+                code: 'TOEIC1',
+                title: 'TOEIC Essential Business Words',
+                category: 'Business English',
+                description: 'Từ vựng thương mại cốt lõi xuất hiện thường xuyên trong đề thi TOEIC.',
+                isCustom: false,
+                teacherName: 'Ban Biên Tập',
+                words: [
+                    { id: 't1', word: 'negotiate', ipa: '/nəˈɡəʊ.ʃi.eɪt/', pos: 'verb', meaning: 'Đàm phán, thương lượng', example: 'The team managed to negotiate a lucrative contract.' },
+                    { id: 't2', word: 'feasible', ipa: '/ˈfiː.zə.bəl/', pos: 'adj', meaning: 'Khả thi, có thể thực hiện', example: 'It is feasible to complete the project within two weeks.' }
+                ]
+            }
+        ];
+
+        createApp({
+            data() {
+                return {
+                    darkMode: false,
+                    activeTab: 'dashboard',
+                    currentUser: null,
+                    isGuest: true,
+                    userProfile: { name: 'Khách', role: 'student' },
+                    showUserDropdown: false,
+                    
+                    // Toasts
+                    toasts: [],
+
+                    // Modals State
+                    modals: {
+                        auth: false,
+                        joinCode: false,
+                        addSet: false,
+                        bulkImport: false,
+                        wordList: false
+                    },
+                    authMode: 'login', // 'login' or 'register'
+                    authForm: { email: '', password: '', name: '', role: 'student' },
+                    
+                    joinCodeInput: '',
+                    newSetForm: { title: '', category: '', description: '' },
+                    bulkImportSetId: '',
+                    bulkImportText: '',
+                    activeViewingSet: null,
+                    singleWordForm: { word: '', ipa: '', meaning: '', example: '' },
+
+                    // Data Storage
+                    vocabSets: DEFAULT_SETS,
+                    studentProgressList: [],
+                    selectedSetId: 'ielts-7',
+
+                    // Stats
+                    userStats: {
+                        wordsMastered: [],
+                        streakDays: 1,
+                        totalQuizzes: 0,
+                        totalCorrect: 0
+                    },
+
+                    // Study Modes State
+                    currentFlashcardIndex: 0,
+                    isCardFlipped: false,
+
+                    quizQuestions: [],
+                    quizCurrentIndex: 0,
+                    quizSelectedOption: null,
+                    quizAnswered: false,
+                    quizScore: 0,
+                    quizFinished: false,
+
+                    matchCards: [],
+                    selectedMatchCards: [],
+                    matchStreak: 0,
+                    matchTimer: 0,
+                    matchInterval: null,
+                    matchingGameFinished: false,
+
+                    spellingIndex: 0,
+                    spellingInput: '',
+                    spellingChecked: false,
+                    isSpellingCorrect: false,
+                    showSpellingHint: false
+                };
+            },
+            computed: {
+                filteredNavTabs() {
+                    const common = [
+                        { id: 'dashboard', label: 'Trang Chủ', icon: 'fa-solid fa-house' }
+                    ];
+
+                    if (this.userProfile.role === 'teacher') {
+                        return [
+                            ...common,
+                            { id: 'teacher-sets', label: 'Quản Lý Bộ Từ', icon: 'fa-solid fa-folder-plus' },
+                            { id: 'analytics', label: 'Báo Cáo Học Sinh', icon: 'fa-solid fa-chart-column' },
+                            { id: 'teacher-corner', label: 'Góc Sư Phạm', icon: 'fa-solid fa-chalkboard-user' }
+                        ];
+                    } else {
+                        return [
+                            ...common,
+                            { id: 'student-sets', label: 'Bộ Từ Vựng', icon: 'fa-solid fa-layer-group' },
+                            { id: 'flashcard', label: 'Flashcards', icon: 'fa-solid fa-clone' },
+                            { id: 'quiz', label: 'Quiz Trắc Nghiệm', icon: 'fa-solid fa-list-check' },
+                            { id: 'matching', label: 'Nối Từ', icon: 'fa-solid fa-puzzle-piece' },
+                            { id: 'spelling', label: 'Gõ Đúng', icon: 'fa-solid fa-keyboard' }
+                        ];
+                    }
+                },
+                currentWordList() {
+                    const set = this.vocabSets.find(s => s.id === this.selectedSetId);
+                    return (set && set.words) ? set.words : [];
+                },
+                currentCard() {
+                    return this.currentWordList[this.currentFlashcardIndex] || {};
+                },
+                masteredWordsCount() {
+                    return this.userStats.wordsMastered.length;
+                },
+                accuracyRate() {
+                    if (this.userStats.totalQuizzes === 0) return 100;
+                    return Math.round((this.userStats.totalCorrect / this.userStats.totalQuizzes) * 100);
+                },
+                currentQuizQuestion() {
+                    return this.quizQuestions[this.quizCurrentIndex] || null;
+                },
+                currentSpellingCard() {
+                    return this.currentWordList[this.spellingIndex] || null;
+                },
+                formattedSpellingExample() {
+                    if (!this.currentSpellingCard || !this.currentSpellingCard.example) return '';
+                    const word = this.currentSpellingCard.word;
+                    const regex = new RegExp(word, 'gi');
+                    return this.currentSpellingCard.example.replace(regex, '_______');
+                }
+            },
+            methods: {
+                // Toast Notifications
+                addToast(message, type = 'info') {
+                    const id = Date.now();
+                    this.toasts.push({ id, message, type });
+                    setTimeout(() => {
+                        this.toasts = this.toasts.filter(t => t.id !== id);
+                    }, 3500);
+                },
+
+                // Firebase Initialization & Auth Flow
+                initFirebase() {
+                    if (!window.FirebaseServices) return;
+                    const { auth, onAuthStateChanged, signInAnonymously, customAuthToken, signInWithCustomToken } = window.FirebaseServices;
+
+                    onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            this.currentUser = user;
+                            this.isGuest = user.isAnonymous;
+                            await this.fetchUserProfile(user.uid);
+                            await this.loadFirestoreData();
+                        } else {
+                            if (customAuthToken) {
+                                try {
+                                    await signInWithCustomToken(auth, customAuthToken);
+                                } catch (e) {
+                                    await signInAnonymously(auth);
+                                }
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        }
+                    });
+                },
+
+                async fetchUserProfile(uid) {
+                    if (this.isGuest) {
+                        this.userProfile = { name: 'Khách (Guest)', role: 'student' };
+                        return;
+                    }
+                    const { db, doc, getDoc, appId } = window.FirebaseServices;
+                    try {
+                        const userDoc = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'user_profiles', uid));
+                        if (userDoc.exists()) {
+                            this.userProfile = userDoc.data();
+                        } else {
+                            const fallbackName = (this.currentUser && this.currentUser.email) 
+                                ? this.currentUser.email.split('@')[0] 
+                                : 'Tài khoản';
+                            this.userProfile = { name: fallbackName, role: 'student' };
+                        }
+                    } catch (err) {
+                        console.error('Error fetching profile:', err);
+                    }
+                },
+
+                openAuthModal(mode = 'login') {
+                    this.authMode = mode;
+                    this.modals.auth = true;
+                },
+
+                async handleAuthSubmit() {
+                    const { auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, db, doc, setDoc, appId } = window.FirebaseServices;
+                    try {
+                        if (this.authMode === 'register') {
+                            const res = await createUserWithEmailAndPassword(auth, this.authForm.email, this.authForm.password);
+                            // Save profile to public profiles collection
+                            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'user_profiles', res.user.uid), {
+                                name: this.authForm.name || 'Người dùng',
+                                role: this.authForm.role,
+                                email: this.authForm.email,
+                                createdAt: new Date().toISOString()
+                            });
+                            this.addToast('Đăng ký tài khoản thành công!', 'success');
+                        } else {
+                            await signInWithEmailAndPassword(auth, this.authForm.email, this.authForm.password);
+                            this.addToast('Đăng nhập thành công!', 'success');
+                        }
+                        this.closeModal('auth');
+                    } catch (err) {
+                        this.addToast(err.message || 'Lỗi xác thực', 'error');
+                    }
+                },
+
+                async handleSignOut() {
+                    const { auth, signOut, signInAnonymously } = window.FirebaseServices;
+                    await signOut(auth);
+                    await signInAnonymously(auth);
+                    this.addToast('Đã đăng xuất.', 'info');
+                },
+
+                // Firestore Data Syncing
+                async loadFirestoreData() {
+                    const { db, collection, getDocs, appId } = window.FirebaseServices;
+                    try {
+                        // Load public vocab sets
+                        const setsSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'vocab_sets'));
+                        const firestoreSets = [];
+                        setsSnap.forEach(d => firestoreSets.push({ id: d.id, ...d.data() }));
+
+                        if (firestoreSets.length > 0) {
+                            this.vocabSets = [...DEFAULT_SETS, ...firestoreSets];
+                        }
+
+                        if (this.userProfile.role === 'teacher') {
+                            this.fetchStudentProgress();
+                        }
+                    } catch (e) {
+                        console.error('Firestore load error:', e);
+                    }
+                },
+
+                async fetchStudentProgress() {
+                    const { db, collection, getDocs, appId } = window.FirebaseServices;
+                    try {
+                        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'student_progress'));
+                        const list = [];
+                        snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+                        this.studentProgressList = list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    } catch (e) {
+                        console.error(e);
+                    }
+                },
+
+                // Code Joiner
+                openJoinCodeModal() {
+                    this.joinCodeInput = '';
+                    this.modals.joinCode = true;
+                },
+                submitJoinCode() {
+                    const code = this.joinCodeInput.trim().toUpperCase();
+                    if (!code) return;
+                    const matchedSet = this.vocabSets.find(s => s.code === code);
+                    if (matchedSet) {
+                        this.selectedSetId = matchedSet.id;
+                        this.addToast(`Đã tham gia lớp bài học: ${matchedSet.title}`, 'success');
+                        this.closeModal('joinCode');
+                        this.activeTab = 'student-sets';
+                    } else {
+                        this.addToast('Không tìm thấy Mã Lớp này trên hệ thống!', 'error');
+                    }
+                },
+
+                // Teacher: Create Set & Unique Code
+                async saveNewSet() {
+                    if (!this.newSetForm.title.trim()) return;
+                    const { db, collection, addDoc, appId } = window.FirebaseServices;
+
+                    // Generate random 6-char upper code
+                    const code = 'ENG' + Math.floor(100 + Math.random() * 900);
+
+                    const newSetData = {
+                        code: code,
+                        title: this.newSetForm.title,
+                        category: this.newSetForm.category || 'Giáo án',
+                        description: this.newSetForm.description || 'Bộ từ do Giáo Viên biên soạn.',
+                        teacherId: this.currentUser ? this.currentUser.uid : 'guest',
+                        teacherName: this.userProfile.name || 'Giáo Viên',
+                        isCustom: true,
+                        words: []
+                    };
+
+                    try {
+                        const docRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'vocab_sets'), newSetData);
+                        this.vocabSets.push({ id: docRef.id, ...newSetData });
+                        this.addToast(`Đã tạo bộ từ mới với Mã Lớp: ${code}`, 'success');
+                        this.newSetForm = { title: '', category: '', description: '' };
+                        this.closeModal('addSet');
+                    } catch (e) {
+                        this.addToast('Không thể lưu bộ từ mới', 'error');
+                    }
+                },
+
+                deleteSet(setId) {
+                    this.vocabSets = this.vocabSets.filter(s => s.id !== setId);
+                    this.addToast('Đã xóa bộ từ', 'info');
+                },
+
+                // Speech Synthesis Audio
+                speakWord(text) {
+                    if ('speechSynthesis' in window) {
+                        window.speechSynthesis.cancel();
+                        const utterance = new SpeechSynthesisUtterance(text);
+                        utterance.lang = 'en-US';
+                        utterance.rate = 0.85;
+                        window.speechSynthesis.speak(utterance);
+                    }
+                },
+
+                // Flashcard Methods
+                resetFlashcards() {
+                    this.currentFlashcardIndex = 0;
+                    this.isCardFlipped = false;
+                },
+                markFlashcard(know) {
+                    if (know && this.currentCard.id) {
+                        if (!this.userStats.wordsMastered.includes(this.currentCard.id)) {
+                            this.userStats.wordsMastered.push(this.currentCard.id);
+                        }
+                    }
+                    this.isCardFlipped = false;
+                    setTimeout(() => {
+                        if (this.currentFlashcardIndex < this.currentWordList.length - 1) {
+                            this.currentFlashcardIndex++;
+                        } else {
+                            this.currentFlashcardIndex = 0;
+                        }
+                    }, 200);
+                },
+
+                // Multiple Choice Quiz
+                switchStudyMode(mode) {
+                    this.activeTab = mode;
+                    if (mode === 'quiz') this.startQuiz();
+                    if (mode === 'matching') this.startMatchingGame();
+                    if (mode === 'spelling') this.resetSpelling();
+                },
+                startQuickQuiz() {
+                    this.switchStudyMode('quiz');
+                },
+                startQuiz() {
+                    const words = this.currentWordList.length > 0 ? this.currentWordList : this.vocabSets[0].words;
+                    if (!words || words.length < 2) return;
+
+                    const questions = words.map(w => {
+                        const isEnToVn = Math.random() > 0.5;
+                        const prompt = isEnToVn ? w.word : w.meaning;
+                        const correct = isEnToVn ? w.meaning : w.word;
+
+                        const allOtherOptions = this.vocabSets
+                            .flatMap(s => s.words || [])
+                            .map(item => isEnToVn ? item.meaning : item.word)
+                            .filter(val => val !== correct);
+
+                        const shuffled = [...new Set(allOtherOptions)].sort(() => 0.5 - Math.random()).slice(0, 3);
+                        const options = [...shuffled, correct].sort(() => 0.5 - Math.random());
+
+                        return {
+                            targetWord: w,
+                            mode: isEnToVn ? 'EN_TO_VN' : 'VN_TO_EN',
+                            prompt: prompt,
+                            ipa: isEnToVn ? w.ipa : '',
+                            correct: correct,
+                            options: options
+                        };
+                    });
+
+                    this.quizQuestions = questions.sort(() => 0.5 - Math.random());
+                    this.quizCurrentIndex = 0;
+                    this.quizScore = 0;
+                    this.quizAnswered = false;
+                    this.quizSelectedOption = null;
+                    this.quizFinished = false;
+                },
+                submitQuizAnswer(opt) {
+                    if (this.quizAnswered) return;
+                    this.quizSelectedOption = opt;
+                    this.quizAnswered = true;
+                    this.userStats.totalQuizzes++;
+
+                    if (opt === this.currentQuizQuestion.correct) {
+                        this.quizScore++;
+                        this.userStats.totalCorrect++;
+                    }
+                },
+                getOptionClass(opt) {
+                    if (!this.quizAnswered) return 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-brand-500';
+                    if (opt === this.currentQuizQuestion.correct) return 'bg-emerald-100 dark:bg-emerald-950/60 border-emerald-500 text-emerald-800 dark:text-emerald-300';
+                    if (opt === this.quizSelectedOption && opt !== this.currentQuizQuestion.correct) return 'bg-rose-100 dark:bg-rose-950/60 border-rose-500 text-rose-800 dark:text-rose-300';
+                    return 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 opacity-50';
+                },
+                async nextQuizQuestion() {
+                    if (this.quizCurrentIndex < this.quizQuestions.length - 1) {
+                        this.quizCurrentIndex++;
+                        this.quizAnswered = false;
+                        this.quizSelectedOption = null;
+                    } else {
+                        this.quizFinished = true;
+                        if (typeof confetti === 'function') {
+                            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                        }
+                        // Record Student Progress in Firestore
+                        await this.recordStudentQuizResult();
+                    }
+                },
+                async recordStudentQuizResult() {
+                    const { db, collection, addDoc, appId } = window.FirebaseServices;
+                    const set = this.vocabSets.find(s => s.id === this.selectedSetId);
+                    try {
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'student_progress'), {
+                            studentId: this.currentUser ? this.currentUser.uid : 'guest',
+                            studentName: this.userProfile.name || 'Học sinh',
+                            setTitle: set ? set.title : 'Quiz Bài Học',
+                            code: set ? set.code : 'N/A',
+                            score: this.quizScore,
+                            total: this.quizQuestions.length,
+                            timestamp: new Date().toISOString()
+                        });
+                    } catch (e) {
+                        console.error('Error saving progress:', e);
+                    }
+                },
+
+                // Matching Game
+                startMatchingGame() {
+                    clearInterval(this.matchInterval);
+                    const words = this.currentWordList.length >= 4 ? this.currentWordList.slice(0, 6) : (this.vocabSets[0].words || []).slice(0, 6);
+                    
+                    let cards = [];
+                    words.forEach(w => {
+                        cards.push({ id: 'en-' + w.id, wordId: w.id, text: w.word, type: 'EN', matched: false, selected: false });
+                        cards.push({ id: 'vn-' + w.id, wordId: w.id, text: w.meaning, type: 'VN', matched: false, selected: false });
+                    });
+
+                    this.matchCards = cards.sort(() => 0.5 - Math.random());
+                    this.selectedMatchCards = [];
+                    this.matchStreak = 0;
+                    this.matchTimer = 0;
+                    this.matchingGameFinished = false;
+
+                    this.matchInterval = setInterval(() => {
+                        this.matchTimer++;
+                    }, 1000);
+                },
+                selectMatchCard(card) {
+                    if (card.matched || card.selected) return;
+                    
+                    card.selected = true;
+                    this.selectedMatchCards.push(card);
+
+                    if (this.selectedMatchCards.length === 2) {
+                        const [c1, c2] = this.selectedMatchCards;
+                        if (c1.wordId === c2.wordId && c1.type !== c2.type) {
+                            c1.matched = true;
+                            c2.matched = true;
+                            c1.selected = false;
+                            c2.selected = false;
+                            this.matchStreak++;
+
+                            if (this.matchCards.every(c => c.matched)) {
+                                clearInterval(this.matchInterval);
+                                this.matchingGameFinished = true;
+                                if (typeof confetti === 'function') confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+                            }
+                        } else {
+                            this.matchStreak = 0;
+                            setTimeout(() => {
+                                c1.selected = false;
+                                c2.selected = false;
+                            }, 500);
+                        }
+                        this.selectedMatchCards = [];
+                    }
+                },
+
+                // Spelling Mode
+                resetSpelling() {
+                    this.spellingIndex = 0;
+                    this.spellingInput = '';
+                    this.spellingChecked = false;
+                    this.isSpellingCorrect = false;
+                    this.showSpellingHint = false;
+                },
+                checkSpelling() {
+                    if (!this.spellingInput.trim() || !this.currentSpellingCard) return;
+                    this.spellingChecked = true;
+                    const cleanUser = this.spellingInput.trim().toLowerCase();
+                    const cleanTarget = this.currentSpellingCard.word.trim().toLowerCase();
+                    this.isSpellingCorrect = (cleanUser === cleanTarget);
+
+                    if (this.isSpellingCorrect) this.userStats.totalCorrect++;
+                    this.userStats.totalQuizzes++;
+                },
+                nextSpellingCard() {
+                    if (this.spellingIndex < this.currentWordList.length - 1) {
+                        this.spellingIndex++;
+                    } else {
+                        this.spellingIndex = 0;
+                    }
+                    this.spellingInput = '';
+                    this.spellingChecked = false;
+                    this.showSpellingHint = false;
+                },
+
+                // Modals & General Actions
+                openModal(name) { this.modals[name] = true; },
+                closeModal(name) { this.modals[name] = false; },
+
+                copyCode(code) {
+                    if (!code) return;
+                    const el = document.createElement('textarea');
+                    el.value = code;
+                    document.body.appendChild(el);
+                    el.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(el);
+                    this.addToast(`Đã chép Mã Lớp: ${code}`, 'success');
+                },
+
+                processBulkImport() {
+                    const set = this.vocabSets.find(s => s.id === this.bulkImportSetId);
+                    if (!set || !this.bulkImportText.trim()) return;
+
+                    const lines = this.bulkImportText.split('\n');
+                    if (!set.words) set.words = [];
+
+                    lines.forEach((line, i) => {
+                        if (!line.trim()) return;
+                        const parts = line.split('|').map(p => p.trim());
+                        if (parts[0] && parts[1]) {
+                            set.words.push({
+                                id: 'w-imp-' + Date.now() + '-' + i,
+                                word: parts[0],
+                                meaning: parts[1],
+                                example: parts[2] || '',
+                                ipa: parts[3] || '/phát âm/',
+                                pos: 'vocab'
+                            });
+                        }
+                    });
+
+                    this.addToast('Import từ vựng hàng loạt thành công!', 'success');
+                    this.bulkImportText = '';
+                    this.closeModal('bulkImport');
+                },
+
+                openWordListModal(set) {
+                    this.activeViewingSet = set;
+                    this.openModal('wordList');
+                },
+                addSingleWordToActiveSet() {
+                    if (!this.activeViewingSet || !this.singleWordForm.word.trim()) return;
+                    if (!this.activeViewingSet.words) this.activeViewingSet.words = [];
+
+                    this.activeViewingSet.words.push({
+                        id: 'w-single-' + Date.now(),
+                        word: this.singleWordForm.word.trim(),
+                        ipa: this.singleWordForm.ipa.trim() || '/.../',
+                        meaning: this.singleWordForm.meaning.trim() || 'Nghĩa từ vựng',
+                        example: this.singleWordForm.example.trim()
+                    });
+
+                    this.addToast('Thêm từ mới thành công', 'success');
+                    this.singleWordForm = { word: '', ipa: '', meaning: '', example: '' };
+                },
+                removeWordFromSet(wordId) {
+                    if (!this.activeViewingSet) return;
+                    this.activeViewingSet.words = this.activeViewingSet.words.filter(w => w.id !== wordId);
+                },
+
+                toggleDarkMode() {
+                    this.darkMode = !this.darkMode;
+                    if (this.darkMode) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                },
+                isMastered(wordId) {
+                    return this.userStats.wordsMastered.includes(wordId);
+                },
+                getMasteredCountForSet(set) {
+                    if (!set.words) return 0;
+                    return set.words.filter(w => this.isMastered(w.id)).length;
+                },
+                formatDate(iso) {
+                    if (!iso) return 'Gần đây';
+                    const d = new Date(iso);
+                    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + d.toLocaleDateString();
+                }
+            },
+            mounted() {
+                window.addEventListener('firebase-ready', () => {
+                    this.initFirebase();
+                });
+                if (window.FirebaseServices) {
+                    this.initFirebase();
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
